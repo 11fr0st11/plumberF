@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -10,6 +10,8 @@ from app.schemas import (
     JobVideoInitiateResponse,
     JobVideoConfirmUploadRequest,
 )
+from app.tasks.video_processing import process_job_video
+
 
 router = APIRouter(
     prefix="/job-videos",
@@ -59,6 +61,7 @@ def initiate_job_video_upload(
 def confirm_job_video_upload(
     job_video_id: int,
     payload: JobVideoConfirmUploadRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     job_video = db.query(JobVideo).filter(JobVideo.id == job_video_id).first()
@@ -72,6 +75,9 @@ def confirm_job_video_upload(
     db.add(job_video)
     db.commit()
     db.refresh(job_video)
+
+    # 🔹 Schedule background processing (no Redis, just FastAPI)
+    background_tasks.add_task(process_job_video, job_video.id)
 
     return job_video
 
